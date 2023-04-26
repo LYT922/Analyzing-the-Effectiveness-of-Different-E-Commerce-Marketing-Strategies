@@ -1,0 +1,53 @@
+---
+title: "Final-Project"
+author: "Michelle"
+date: "2023-04-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load libraries
+library(cluster)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(plotly)
+library(data.table)
+#library(caret)
+library(ggbiplot)
+library(tidyr)
+library(cowplot)
+library(data.table)
+library(lubridate)
+library("factoextra")
+```
+
+
+```{r cars}
+df <- read.csv(file = "Amazon.csv")
+head(df)
+```
+```{r}
+# Remove the specified columns from the data frame
+amazon <- df %>% select(-c('Unnamed..22', 'fulfilled.by', 'ship.country', 'currency', 'Sales.Channel', 'currency', 'Courier.Status','promotion.ids'))
+
+amazon <- na.omit(amazon)
+head(amazon)
+```
+```{r}
+amazon$B2B <- ifelse(amazon$B2B == "True", 1, 0)
+amazon$Fulfilment <- ifelse(amazon$Fulfilment == "Amazon", 1, 0)
+amazon[is.na(amazon$Amount), ]
+amazon$Amount[is.na(amazon$Amount)] <- 0
+amazon$Size <- factor(amazon$Size, levels = c("Free", "XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL", "6XL"))
+amazon$Size <- as.integer(reorder(as.character(amazon$Size), amazon$Size))
+amazon$Status <- factor(amazon$Status)
+amazon <- na.omit(amazon)
+head(amazon)
+```
+
+
