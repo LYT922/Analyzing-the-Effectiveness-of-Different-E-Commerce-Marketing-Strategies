@@ -1,0 +1,87 @@
+---
+title: "project"
+output: html_document
+date: "2023-05-01"
+---
+
+```{r setup, include=FALSE}
+df <- read.csv("Amazon_Sales.csv")
+df$Date <- as.Date(df$Date, format = "%m-%d-%Y")
+df<-na.omit(df)
+df<-subset(df,select=-c(Sales.Channel,currency,ship.country,Order.ID,Courier.Status,promotion.ids,Unnamed..22,SKU))
+
+proc_df<-df
+```
+
+
+```{r}
+# create mapping for unique values based on severity
+status_mapping <- setNames(c(0, 2, 1, 6, 11, 7, 3, 8, 4, 10, 9, 12, 5), 
+                           c("Cancelled", "Shipped - Delivered to Buyer", "Shipped",
+                             "Shipped - Returned to Seller", "Shipped - Rejected by Buyer",
+                             "Shipped - Lost in Transit", "Shipped - Out for Delivery",
+                             "Shipped - Returning to Seller", "Shipped - Picked Up",
+                             "Pending - Waiting for Pick Up", "Pending", "Shipped - Damaged",
+                             "Shipping"))
+
+
+proc_df$Status <- status_mapping[proc_df$Status]
+
+unique_fulfillment <- unique(proc_df$Fulfilment)
+fulfillment_mapping <- setNames(seq_along(unique_fulfillment) - 1, unique_fulfillment)
+proc_df$Fulfilment <- fulfillment_mapping[proc_df$Fulfilment]
+
+service_level_mapping <- c("Standard" = 1, "Expedited" = 2)
+proc_df$ship.service.level <- service_level_mapping[proc_df$ship.service.level]
+
+cat_mapping <- c("Set" = 1, "kurta" = 2, "Western Dress" = 3, "Top" = 4, "Ethnic Dress" = 5, "Bottom" = 6, "Saree" = 7, "Blouse" = 8, "Dupatta" = 9)
+proc_df$Category <- cat_mapping[proc_df$Category]
+
+size_mapping <- c("S" = 1, "XS" = 2, "M" = 3, "L" = 4, "XL" = 5, "XXL" = 6, "3XL" = 7, "4XL" = 8, "5XL" = 9, "6XL" = 10, "Free" = 11)
+proc_df$Size <- size_mapping[proc_df$Size]
+
+b2b_mapping <- c("False"=0,"True"=1)
+proc_df$B2B <- b2b_mapping[proc_df$B2B]
+
+unique_style <- unique(proc_df$Style)
+style_mapping <- setNames(seq_along(unique_style) - 1, unique_style)
+proc_df$Style <- style_mapping[proc_df$Style]
+
+
+unique_asin <- unique(proc_df$ASIN)
+asin_mapping <- setNames(seq_along(unique_asin) - 1, unique_asin)
+proc_df$ASIN <- asin_mapping[proc_df$ASIN]
+
+# map the "Fulfillment" column to numeric values
+proc_df<-subset(proc_df,select=-c(ship.city,ship.state,fulfilled.by,Date))
+
+```
+
+```{r}
+min_max_scale <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+proc_df[] <- lapply(proc_df, min_max_scale)
+
+
+
+```
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
