@@ -1,0 +1,260 @@
+---
+title: "project"
+output: html_document
+date: "2023-05-01"
+---
+```{r}
+install.packages("ggbiplot")
+```
+
+```{r}
+# load libraries
+library(cluster)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(plotly)
+library(data.table)
+library(tidyr)
+library(cowplot)
+library(data.table)
+library(lubridate)
+library("factoextra")
+#library(caret)
+library(cowplot)
+library(lubridate)
+```
+
+
+```{r}
+df <- read.csv("Amazon.csv")
+df<-na.omit(df)
+df<-subset(df,select=-c(Sales.Channel,currency,ship.country,Order.ID,Courier.Status,promotion.ids,SKU))
+proc_df<-df
+
+```
+
+
+```{r}
+
+
+proc_df$Status <- ifelse(proc_df$Status == "Cancelled", 2,
+                        ifelse(proc_df$Status == "Delivered", 0,
+                               ifelse(proc_df$Status == "Shipped", 1, 3)))
+
+
+unique_fulfillment <- unique(proc_df$Fulfilment)
+fulfillment_mapping <- setNames(seq_along(unique_fulfillment) - 1, unique_fulfillment)
+proc_df$Fulfilment <- fulfillment_mapping[proc_df$Fulfilment]
+
+service_level_mapping <- c("Standard" = 1, "Expedited" = 2)
+proc_df$ship.service.level <- service_level_mapping[proc_df$ship.service.level]
+
+cat_mapping <- c("Set" = 1, "kurta" = 2, "Western Dress" = 3, "Top" = 4, "Ethnic Dress" = 5, "Bottom" = 6, "Saree" = 7, "Blouse" = 8, "Dupatta" = 9)
+proc_df$Category <- cat_mapping[proc_df$Category]
+
+size_mapping <- c("S" = 1, "XS" = 0, "M" = 2, "L" = 3, "XL" = 4, "XXL" = 5, "3XL" = 6, "4XL" = 7, "5XL" = 8, "6XL" = 9, "Free" = 10)
+proc_df$Size <- size_mapping[proc_df$Size]
+
+proc_df$B2B <- ifelse(proc_df$B2B == "TRUE", 1, 0)
+
+
+unique_style <- unique(proc_df$Style)
+style_mapping <- setNames(seq_along(unique_style) - 1, unique_style)
+proc_df$Style <- style_mapping[proc_df$Style]
+
+
+unique_asin <- unique(proc_df$ASIN)
+asin_mapping <- setNames(seq_along(unique_asin) - 1, unique_asin)
+proc_df$ASIN <- asin_mapping[proc_df$ASIN]
+
+# map the "Fulfillment" column to numeric values
+proc_date <-subset(proc_df,select=-c(ship.city,ship.state,index))
+proc_df<-subset(proc_df,select=-c(ship.city,ship.state,Date,index))
+head(proc_df)
+```
+#Scale
+```{r}
+proc_df <- scale(proc_df)
+```
+**PCA**
+```{r}
+pca_model <- prcomp(proc_df, scale = T)
+pca_model$rotation <- -1*pca_model$rotation
+pca_model$x <- -1*pca_model$x
+head(pca_model$rotation)
+```
+
+**Make a scree plot**
+```{r}
+#calculate total variance explained by each principal component
+var_explained <- pca_model$sdev^2 / sum(pca_model$sdev^2)
+percent_var <- 100*var_explained
+par(mfrow = c(1, 2))
+plot(percent_var, xlab = "Principal Component",
+    ylab = "Proportion of Variance Explained",
+    type = "b")
+plot(cumsum(percent_var), xlab = "Principal Component",
+    ylab = "Cumulative Proportion of Variance Explained",
+     type = "b")
+
+```
+```{r}
+plot(pca_model$x[,1], pca_model$x[,2], xlab = "PC1", ylab = "PC2")
+```
+
+
+```{r}
+pca_out <- pca_model$x[, 1:7]
+```
+
+
+```{r}
+biplot(pca_model, scale=0)
+```
+
+
+**Clustering**
+```{r}
+set.seed(123)
+sample_rows <- sample(nrow(pca_out), 10000)
+pca_out <- pca_out[sample_rows, ]
+df_sample <- proc_df[sample_rows, ]
+```
+
+
+```{r}
+set.seed(234)
+fviz_nbclust(pca_out, kmeans, method = "wss",k.max=10, nstart=30, iter.max=30) +
+  geom_vline(xintercept = 5, linetype = 2)+
+  labs(subtitle = "Elbow method")
+```
+```{r}
+
+fviz_nbclust(df_sampe, kmeans, method = "gap_stat", nboot = 20, k.max=7, nstart=20, iter.max=40) +
+  labs(subtitle = "Gap statistic method")
+
+```
+
+
+```{r}
+kmeans_out <- kmeans(pca_out, centers = 5, nstart = 25)
+cluster_assignments <- kmeans_out$cluster
+```
+
+**Silhouette**
+```{r fig.width=9,fig.height=9}
+
+#Silhouette
+set.seed(123)
+results <- lapply(2:20, function(k) {
+  kmeans_cluster <- kmeans(pca_out, k, nstart=30, iter.max=20)
+  si <- silhouette(kmeans_cluster$cluster, dist = dist(df_sample))
+  data.frame(k=k,sil_width=mean(si[,'sil_width']),sil_width_min=min(si[,'sil_width']))
+})
+si_df <- bind_rows(results)
+
+ggplot(si_df, aes(x=k,y=sil_width,color="Width Avg"))+geom_point()+geom_line()+
+  geom_point(aes(y=sil_width_min,color="Width Min"))+geom_line(aes(y=sil_width_min,color="Width Min"))
+
+```
+**The above plot show that average silhouette width has a peak at k=2**
+
+```{r}
+set.seed(135)
+fviz_nbclust(df_sample, kmeans, method = "silhouette", nboot = 20,k.max=10, nstart=25, iter.max=40)+
+  labs(subtitle = "Silhouette method")
+```
+
+```{r}
+kmeans_out_3 <- kmeans(df_sample, centers = 3, nstart = 25)
+cluster_assignments_3 <- kmeans_out_3$cluster
+plot(pca_model$x[,1], pca_model$x[,2], xlab = "PC1", ylab = "PC2", col = cluster_assignments_3)
+```
+```{r}
+df_transposed <- t(proc_df)
+data_dis_m <- dist(df_transposed)
+market.complete <- hclust(data_dis_m, method = "complete")
+plot(market.complete, main = "Complete Linkage Dendrogram")
+```
+```{r}
+market.single <- hclust(data_dis_m, method = "single")
+plot(market.single, main = "Single Linkage Dendrogram")
+```
+```{r}
+market.average <- hclust(data_dis_m, method = "average")
+plot(market.average, main = "Average linkage Linkage Dendrogram")
+```
+
+
+```{r}
+
+df2<-df[sample_rows,]
+# Add cluster labels to dataframe
+df2$cluster <- kmeans_out$cluster
+
+```
+
+**Time**
+```{r}
+parsed_dates <- parse_date_time(df2$Date, orders = c("mdy", "y/m/d"))
+
+# convert the parsed dates to a standardized format
+df2$Date <- format(parsed_dates, "%Y-%m-%d")
+
+df2$Date<-as.Date(df2$Date)
+```
+
+
+```{r}
+df_month <- df2 %>% 
+  mutate(month = format(Date, "%m")) %>% 
+  group_by(month) %>% 
+  summarise(sum_quantity = sum(Qty))
+
+# plot sum of quantity for each month
+ggplot(df_month, aes(x = month, y = sum_quantity)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Month", y = "Sum of quantity")
+```
+Since, month 4,5,6 has more sales for amazon. We will analyze those months.
+```{r}
+# Filter for January, March, and May
+filtered_df <- df2[month(df2$Date) %in% c(4, 5, 6), ]
+```
+
+
+
+```{r}
+plot_cluster <- function(cluster_df) {
+  ggplot(cluster_df, aes(x = Status,y= Qty)) +
+    geom_col(fill = "blue") +
+    labs(title = paste("Cluster", unique(cluster_df$cluster)), x = "Date", y = "Quantity")
+}
+
+# Use lapply to apply the plot_cluster function to each cluster and combine the results into a list
+plots <- lapply(split(filtered_df, filtered_df$cluster), plot_cluster)
+
+for (i in seq_along(plots)) {
+  print(plots[[i]])
+}
+```
+
+```{r}
+plot_cluster <- function(cluster_df) {
+  ggplot(cluster_df, aes(x = Fulfilment,y=)) +
+    geom_col(fill = "blue") +
+    labs(title = paste("Cluster", unique(cluster_df$cluster)), x = "Date", y = "Quantity")
+}
+
+# Use lapply to apply the plot_cluster function to each cluster and combine the results into a list
+plots <- lapply(split(filtered_df, filtered_df$cluster), plot_cluster)
+
+for (i in seq_along(plots)) {
+  print(plots[[i]])
+}
+```
+
+
+
+
