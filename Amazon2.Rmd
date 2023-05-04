@@ -1,0 +1,185 @@
+---
+title: "project"
+output: html_document
+date: "2023-05-01"
+---
+```{r}
+install.packages("ggbiplot")
+```
+
+```{r}
+# load libraries
+library(cluster)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(plotly)
+library(data.table)
+library(tidyr)
+library(cowplot)
+library(data.table)
+library(lubridate)
+library("factoextra")
+#library(caret)
+library(cowplot)
+library(lubridate)
+```
+
+
+```{r}
+df <- read.csv("Amazon2.csv")
+df<-na.omit(df)
+df<-subset(df,select=-c(Sales.Channel,currency,ship.country,Order.ID,Courier.Status,promotion.ids,SKU))
+
+```
+
+
+```{r}
+
+parsed_dates <- parse_date_time(df$Date, orders = c("mdy", "y/m/d"))
+
+# convert the parsed dates to a standardized format
+df$Date <- format(parsed_dates, "%Y-%m-%d")
+
+df$Date<-as.Date(df$Date)
+
+status_mapping <- setNames(c(2, 0, 1, 3), 
+                           c("Cancelled", "Delivered", "Shipped","Lost"))
+
+
+proc_df$Status <- status_mapping[proc_df$Status]
+
+unique_fulfillment <- unique(proc_df$Fulfilment)
+fulfillment_mapping <- setNames(seq_along(unique_fulfillment) - 1, unique_fulfillment)
+proc_df$Fulfilment <- fulfillment_mapping[proc_df$Fulfilment]
+
+service_level_mapping <- c("Standard" = 1, "Expedited" = 2)
+proc_df$ship.service.level <- service_level_mapping[proc_df$ship.service.level]
+
+cat_mapping <- c("Set" = 1, "kurta" = 2, "Western Dress" = 3, "Top" = 4, "Ethnic Dress" = 5, "Bottom" = 6, "Saree" = 7, "Blouse" = 8, "Dupatta" = 9)
+proc_df$Category <- cat_mapping[proc_df$Category]
+
+size_mapping <- c("S" = 1, "XS" = 0, "M" = 2, "L" = 3, "XL" = 4, "XXL" = 5, "3XL" = 6, "4XL" = 7, "5XL" = 8, "6XL" = 9, "Free" = 10)
+proc_df$Size <- size_mapping[proc_df$Size]
+
+proc_df$B2B <- ifelse(proc_df$B2B == "TRUE", 1, 0)
+
+
+unique_style <- unique(proc_df$Style)
+style_mapping <- setNames(seq_along(unique_style) - 1, unique_style)
+proc_df$Style <- style_mapping[proc_df$Style]
+
+
+unique_asin <- unique(proc_df$ASIN)
+asin_mapping <- setNames(seq_along(unique_asin) - 1, unique_asin)
+proc_df$ASIN <- asin_mapping[proc_df$ASIN]
+
+# map the "Fulfillment" column to numeric values
+proc_date <-subset(proc_df,select=-c(ship.city,ship.state,index))
+proc_df<-subset(proc_df,select=-c(ship.city,ship.state,Date,index))
+head(proc_df)
+```
+
+```{r}
+proc_df <- scale(proc_df)
+```
+**PCA**
+```{r}
+pca_model <- prcomp(proc_df, scale = T)
+pca_model$rotation <- -1*pca_model$rotation
+pca_model$x <- -1*pca_model$x
+head(pca_model$rotation)
+```
+
+**Make a scree plot**
+```{r}
+#calculate total variance explained by each principal component
+var_explained <- pca_model$sdev^2 / sum(pca_model$sdev^2)
+percent_var <- 100*var_explained
+par(mfrow = c(1, 2))
+plot(percent_var, xlab = "Principal Component",
+    ylab = "Proportion of Variance Explained",
+    type = "b")
+plot(cumsum(percent_var), xlab = "Principal Component",
+    ylab = "Cumulative Proportion of Variance Explained",
+     type = "b")
+
+```
+
+```{r}
+pca_out <- pca_model$x[, 1:7]
+```
+
+
+```{r}
+biplot(pca_model, scale=0)
+```
+
+
+
+```{r}
+set.seed(123)
+sample_rows <- sample(nrow(pca_out), 10000)
+pca_out <- pca_out[sample_rows, ]
+# Compute pairwise distances based on first three principal components
+data_dist <- dist(pca_out)
+# Perform hierarchical clustering using complete linkage
+data_complete <- hclust(data_dist, method = "complete")
+# Plot dendrogram
+plot(data_complete, main = "Complete Linkage Dendrogram for data")
+```
+
+
+```{r}
+set.seed(234)
+fviz_nbclust(pca_out, kmeans, method = "wss",k.max=10, nstart=30, iter.max=30) +
+  geom_vline(xintercept = 5, linetype = 2)+
+  labs(subtitle = "Elbow method")
+```
+
+```{r}
+
+kmeans_out <- kmeans(pca_out, centers = 5, nstart = 25)
+cluster_assignments <- kmeans_out$cluster
+```
+
+```{r}
+# Extract cluster labels
+cluster_labels <- cutree(data_complete, k = 5)
+
+df2<-df[sample_rows,]
+# Add cluster labels to dataframe
+df2$cluster <- kmeans_out$cluster
+
+```
+
+**Time**
+```{r}
+parsed_dates <- parse_date_time(df2$Date, orders = c("mdy", "y/m/d"))
+
+# convert the parsed dates to a standardized format
+df2$Date <- format(parsed_dates, "%Y-%m-%d")
+
+df2$Date<-as.Date(df2$Date)
+```
+
+
+```{r}
+df_month <- df2 %>% 
+  mutate(month = format(Date, "%m")) %>% 
+  group_by(month) %>% 
+  summarise(sum_quantity = sum(Qty))
+
+# plot sum of quantity for each month
+ggplot(df_month, aes(x = month, y = sum_quantity)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Month", y = "Sum of quantity")
+```
+
+
+
+
+
+
+
+
