@@ -1,15 +1,14 @@
 ---
 title: "project"
 output: html_document
-date: "2023-05-01"
+date: "2023-05-08"
 ---
-```{r}
-install.packages("ggbiplot")
-```
+
 
 ```{r}
 # load libraries
 library(cluster)
+library(tidyverse)
 library(dplyr)
 library(magrittr)
 library(ggplot2)
@@ -31,13 +30,125 @@ df <- read.csv("Amazon.csv")
 df<-na.omit(df)
 df<-subset(df,select=-c(Sales.Channel,currency,ship.country,Order.ID,Courier.Status,promotion.ids,SKU))
 proc_df<-df
+head(proc_df)
+```
+```{r}
+sales_by_category <- proc_df %>%
+  group_by(Category) %>%
+  summarise(total_sales = sum(Qty))
 
+ggplot(sales_by_category, aes(x = Category, y = total_sales)) +
+  geom_col() +
+  xlab("Category") +
+  ylab("Total Sales") +
+  ggtitle("Distribution of Sales by Category")
+```
+```{r}
+sales_by_size <- proc_df %>%
+  group_by(Size) %>%
+  summarise(total_sales = sum(Qty))
+
+ggplot(sales_by_size, aes(x = Size, y = total_sales)) +
+  geom_col() +
+  xlab("Size") +
+  ylab("Total Sales") +
+  ggtitle("Distribution of Sales by Size")
+```
+```{r}
+sales_by_style <- proc_df %>%
+  group_by(Style) %>%
+  summarise(total_sales = sum(Qty))
+
+top_style <- sales_by_style %>% 
+  arrange(desc(total_sales)) %>% 
+  head(1)
+top_style
+```
+```{r}
+# Group by category and size, sum the sales
+sales_by_category_size <- proc_df %>%
+  filter(Qty > 0) %>%  # filter out canceled orders
+  group_by(Category, Size) %>%
+  summarise(total_sales = sum(Amount))
+
+# Sort by total sales in descending order
+top_categories_sizes <- sales_by_category_size %>%
+  arrange(desc(total_sales))
+
+# View the top categories and sizes
+head(top_categories_sizes, n = 10)
+```
+```{r}
+# create a subset of the top 10 selling categories and sizes
+top_categories <- head(proc_df %>% 
+                          filter(Qty != 0) %>% 
+                          group_by(Category) %>% 
+                          summarize(total_sales = sum(Amount)) %>% 
+                          arrange(desc(total_sales)), 10)
+
+top_sizes <- head(proc_df %>% 
+                     filter(Qty != 0) %>% 
+                     group_by(Size) %>% 
+                     summarize(total_sales = sum(Amount)) %>% 
+                     arrange(desc(total_sales)), 10)
+
+top_state <- head(proc_df %>% 
+                     filter(Qty != 0) %>% 
+                     group_by(ship.state) %>% 
+                     summarize(total_sales = sum(Amount)) %>% 
+                     arrange(desc(total_sales)), 10)
+
+# create a bar plot for top selling categories
+ggplot(top_categories, aes(x = reorder(Category, total_sales), y = total_sales)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Top Selling Categories", x = "Category", y = "Total Sales") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# create a bar plot for top selling sizes
+ggplot(top_sizes, aes(x = reorder(Size, total_sales), y = total_sales)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Top Selling Sizes", x = "Size", y = "Total Sales") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# create a bar plot for top selling state
+ggplot(top_state, aes(x = reorder(ship.state, total_sales), y = total_sales)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Top Selling Sate", x = "State", y = "Total Sales") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+```
+**B2B or not**
+This shows that most Amazom in India sales are base B2C or C2C. 
+```{r}
+B2B_category <- proc_df %>%
+  group_by(B2B) %>%
+  summarise(Count = sum(Qty))
+
+ggplot(B2B_category, aes(x = B2B, y = Count)) +
+  geom_col() +
+  xlab("B2B or not") +
+  ylab("Count") +
+  ggtitle("Distribution of Sales by B2B or not")
+```
+**Offering expedited shipping increase sales**
+```{r}
+ship_category <- proc_df %>%
+  group_by(ship.service.level) %>%
+  summarise(Count = sum(Qty))
+
+ggplot(ship_category, aes(x = ship.service.level, y = Count)) +
+  geom_col() +
+  xlab("Ship Servise Level") +
+  ylab("Count") +
+  ggtitle("shipping service level and Sales")
 ```
 
 
 ```{r}
-
-
 proc_df$Status <- ifelse(proc_df$Status == "Cancelled", 2,
                         ifelse(proc_df$Status == "Delivered", 0,
                                ifelse(proc_df$Status == "Shipped", 1, 3)))
@@ -71,12 +182,40 @@ proc_df$ASIN <- asin_mapping[proc_df$ASIN]
 # map the "Fulfillment" column to numeric values
 proc_date <-subset(proc_df,select=-c(ship.city,ship.state,index))
 proc_df<-subset(proc_df,select=-c(ship.city,ship.state,Date,index))
-head(proc_df)
+colnames(proc_df)
 ```
-#Scale
+
+
+
 ```{r}
 proc_df <- scale(proc_df)
 ```
+```{r}
+set.seed(697)
+pick_rows <- sample(nrow(proc_df), 30000)
+df_sample <- proc_df[pick_rows, ]
+heatmap(df_sample)
+```
+```{r}
+library(gplots)
+heatmap.2(df_sample,
+          trace = "none",
+          density.info = "none",
+          scale = "none",
+          col = colorRampPalette(c("blue", "white", "red"))(100),
+          dendrogram = "both",
+          margins = c(5,5),
+          main = "Heatmap with Annotations",
+          notecol = "black",
+          labRow = NA, # do not show row labels
+          labCol = NA, # do not show column labels
+          key = TRUE, # show color key
+          cexRow = 1.0, # set row label size
+          cexCol = 1.0 # set column label size
+)
+```
+
+
 **PCA**
 ```{r}
 pca_model <- prcomp(proc_df, scale = T)
