@@ -1,7 +1,7 @@
 ---
 title: "project"
 output: html_document
-date: "2023-05-08"
+date: "2023-05-01"
 ---
 
 
@@ -105,22 +105,26 @@ ggplot(top_categories, aes(x = reorder(Category, total_sales), y = total_sales))
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
+```
+```{r}
 # create a bar plot for top selling sizes
 ggplot(top_sizes, aes(x = reorder(Size, total_sales), y = total_sales)) +
   geom_bar(stat = "identity", fill = "skyblue") +
   labs(title = "Top Selling Sizes", x = "Size", y = "Total Sales") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
 
+```{r}
 # create a bar plot for top selling state
 ggplot(top_state, aes(x = reorder(ship.state, total_sales), y = total_sales)) +
   geom_bar(stat = "identity", fill = "skyblue") +
   labs(title = "Top Selling Sate", x = "State", y = "Total Sales") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-
 ```
+
+
 **B2B or not**
 This shows that most Amazom in India sales are base B2C or C2C. 
 ```{r}
@@ -145,6 +149,50 @@ ggplot(ship_category, aes(x = ship.service.level, y = Count)) +
   xlab("Ship Servise Level") +
   ylab("Count") +
   ggtitle("shipping service level and Sales")
+```
+**Extract B2B data**
+```{r}
+b2b_data <- proc_df[proc_df$B2B == TRUE,]
+```
+```{r}
+# create a subset of the top 10 selling categories and sizes
+b2btop_categories <- head(b2b_data %>% 
+                          filter(Qty != 0) %>% 
+                          group_by(Category) %>% 
+                          summarize(total_sales = sum(Amount)) %>% 
+                          arrange(desc(total_sales)), 10)
+
+b2btop_sizes <- head(b2b_data %>% 
+                     filter(Qty != 0) %>% 
+                     group_by(Size) %>% 
+                     summarize(total_sales = sum(Amount)) %>% 
+                     arrange(desc(total_sales)), 10)
+b2btop_state <- head(b2b_data %>% 
+                     filter(Qty != 0) %>% 
+                     group_by(ship.state) %>% 
+                     summarize(total_sales = sum(Amount)) %>% 
+                     arrange(desc(total_sales)), 10)
+```
+```{r}
+# create a bar plot for top selling categories
+ggplot(b2btop_categories, aes(x = reorder(Category, total_sales), y = total_sales)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Top Selling Categories foe B2B", x = "Category", y = "Total Sales") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+# create a bar plot for top selling categories
+ggplot(b2btop_sizes, aes(x = reorder(Size, total_sales), y = total_sales)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Top Selling Size for B2B", x = "Size", y = "Total Sales") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+# create a bar plot for top selling categories
+ggplot(b2btop_state, aes(x = reorder(ship.state, total_sales), y = total_sales)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Top Selling State for B2B", x = "ship.state", y = "Total Sales") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
 ```
 
 
@@ -188,37 +236,13 @@ colnames(proc_df)
 
 
 ```{r}
-proc_df <- scale(proc_df)
-```
-```{r}
-set.seed(697)
-pick_rows <- sample(nrow(proc_df), 30000)
-df_sample <- proc_df[pick_rows, ]
-heatmap(df_sample)
-```
-```{r}
-library(gplots)
-heatmap.2(df_sample,
-          trace = "none",
-          density.info = "none",
-          scale = "none",
-          col = colorRampPalette(c("blue", "white", "red"))(100),
-          dendrogram = "both",
-          margins = c(5,5),
-          main = "Heatmap with Annotations",
-          notecol = "black",
-          labRow = NA, # do not show row labels
-          labCol = NA, # do not show column labels
-          key = TRUE, # show color key
-          cexRow = 1.0, # set row label size
-          cexCol = 1.0 # set column label size
-)
-```
+df_std<-as.data.frame(scale(proc_df))
 
+```
 
 **PCA**
 ```{r}
-pca_model <- prcomp(proc_df, scale = T)
+pca_model <- prcomp(df_std)
 pca_model$rotation <- -1*pca_model$rotation
 pca_model$x <- -1*pca_model$x
 head(pca_model$rotation)
@@ -238,6 +262,16 @@ plot(cumsum(percent_var), xlab = "Principal Component",
      type = "b")
 
 ```
+```{r}
+set.seed(452)
+# memory out
+sample_rows <- sample(nrow(df_std), 10000)
+df_matrix<-data.matrix(df_std)
+heatmap(df_matrix[sample_rows, ],col=rainbow(256))
+```
+Fullfulment and service leve is kinda the same. 
+
+
 ```{r}
 plot(pca_model$x[,1], pca_model$x[,2], xlab = "PC1", ylab = "PC2")
 ```
